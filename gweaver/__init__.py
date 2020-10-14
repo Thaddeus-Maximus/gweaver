@@ -4,8 +4,21 @@ PROTOTRAK_PLUS_CONFIG = {
 	"line_numbers": True,
 	"separator": " ",
 	"line_ending": ";\n",
-	"comment": lambda x: " ("+x+")"
+	"comment": lambda x: " ("+x+")",
+	"header": "",
+	"footer": "%"
 }
+
+class FileWrapper:
+	def __init__(self, file, binary=False, en_print=False):
+		self.file     = file
+		self.binary   = binary
+		self.en_print = en_print
+
+	def write(self, x):
+		if self.en_print:
+			print(x, end='')
+		self.file.write(str.encode(x) if self.binary else x)
 
 class Program:
 	def __init__(self, config):
@@ -16,7 +29,15 @@ class Program:
 		# adds specified line of gcode, with no computations
 		self.lines.append((code, kwargs))
 
-	def to_file(self, file):
+	def arc(self, XB=None, YB=None, XE=None, YE=None, R=None, RS=0, XC=None, YC=None):
+		# Provide either:
+		# XB, YB, XE, YE, R, CS
+		# XB, YB, XE, YE, XC, YC
+		# R is radius, CS is "center select"; -2 is large left-hand, -1 is small left-hand, +1 is small right-hand, +2 is large right-hand
+		pass
+
+	def to_file(self, rawfile, binary=False, en_print=False):
+		file = FileWrapper(rawfile, binary, en_print)
 		# post-processes gcode into specified file-like object (has .write method)
 		for idx, line in enumerate(self.lines):
 			if self.config["line_numbers"]:
