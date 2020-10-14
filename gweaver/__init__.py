@@ -7,6 +7,16 @@ PROTOTRAK_PLUS_CONFIG = {
 	"comment": lambda x: " ("+x+")",
 	"header": "",
 	"footer": "%"
+	"compensation": True
+}
+
+BENCHMAN_CONFIG = {
+	"places": 4,
+	"line_numbers": True,
+	"separator": " ",
+	"line_ending": ";\n",
+	"comment": lambda x: "",
+	"compensation": False
 }
 
 class FileWrapper:
@@ -36,8 +46,20 @@ class Program:
 		# R is radius, CS is "center select"; -2 is large left-hand, -1 is small left-hand, +1 is small right-hand, +2 is large right-hand
 		pass
 
+	def toolchange(self, T=0, D=None):
+		# perform a toolchange
+		pass
+
+	def compensation(self, C=0):
+		# set compensation mode
+		pass
+
+	def line(self, code, XB=None, YB=None, XE=None, YE=None):
+		pass
+
 	def to_file(self, rawfile, binary=False, en_print=False):
 		file = FileWrapper(rawfile, binary, en_print)
+		file.write(self.config["header"])
 		# post-processes gcode into specified file-like object (has .write method)
 		for idx, line in enumerate(self.lines):
 			if self.config["line_numbers"]:
@@ -67,4 +89,4 @@ class Program:
 			if "comment" in codesets:
 				file.write(self.config["comment"](codesets["comment"]))
 			file.write(self.config["line_ending"])
-
+		file.write("footer")
