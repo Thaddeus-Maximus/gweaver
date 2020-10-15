@@ -2,8 +2,7 @@ import gweaver
 from math import *
 import serial
 
-prog = gweaver.Program(gweaver.PROTOTRAK_PLUS_CONFIG)
-prog.code("PN1 G20 G90")
+prog = gweaver.Program(gweaver.PROTOTRAK_PLUS_CONFIG).units("in").relativity("abs")
 
 ##################
 ### REAL STUFF ###
@@ -13,18 +12,20 @@ print("Input offset")
 o = float(input())
 
 prog.code("M06", T=1, D=0.375)
-prog.code("G40")
+prog.toolchange(D=0.375)
+prog.compensation("center")
 
 x = [-2.388+o, -1.163-o]
 y = [-2.063-o, -2.391-o, -2.891+o]
 feedrate = 10.0
 
 prog.code("G00", X=x[0], Y=y[0], comment="Rapid")
+prog.feedrate(feedrate)
 
-prog.code("G01", XE=x[0], YE=y[2], F=feedrate, absolute=True)
-prog.code("G01", XE=x[1], YE=y[2], F=feedrate, absolute=True)
-prog.code("G01", XE=x[1], YE=y[1], F=feedrate, absolute=True)
-prog.code("G01", XE=x[0], YE=y[0], F=feedrate, absolute=True)
+prog.line(XE=x[0], YE=y[2])
+prog.line(XE=x[1], YE=y[2])
+prog.line(XE=x[1], YE=y[1])
+prog.line(XE=x[0], YE=y[0])
 
 ####################
 ### POST PROCESS ###
