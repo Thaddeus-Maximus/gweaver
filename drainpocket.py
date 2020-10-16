@@ -11,7 +11,6 @@ prog = gweaver.Program(gweaver.PROTOTRAK_PLUS_CONFIG).units("in").relativity("ab
 print("Input offset")
 o = float(input())
 
-prog.code("M06", T=1, D=0.375)
 prog.toolchange(D=0.375)
 prog.compensation("center")
 
@@ -31,5 +30,5 @@ prog.line(XE=x[0], YE=y[0])
 ### POST PROCESS ###
 ####################
 
-with serial.Serial("COM13", baudrate=4800, bytesize=serial.SEVENBITS, parity=serial.PARITY_EVEN, stopbits=serial.STOPBITS_ONE) as s:
+with serial.Serial("COM3", baudrate=4800, bytesize=serial.SEVENBITS, parity=serial.PARITY_EVEN, stopbits=serial.STOPBITS_ONE) as s:
 	prog.to_file(s, binary=True, en_print=True)

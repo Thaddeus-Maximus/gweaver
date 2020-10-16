@@ -27,11 +27,16 @@ class FileWrapper:
 		self.file     = file
 		self.binary   = binary
 		self.en_print = en_print
+		self.buf      = ""
 
 	def write(self, x):
 		if self.en_print:
 			print(x, end='')
-		self.file.write(str.encode(x) if self.binary else x)
+		self.buf += x
+
+	def close(self):
+		#print(str.encode(self.buf))
+		self.file.write(str.encode(self.buf) if self.binary else self.buf)
 
 class Program:
 	def __init__(self, config):
@@ -56,7 +61,7 @@ class Program:
 		# R is radius, CS is "center select"; -2 is large left-hand, -1 is small left-hand, +1 is small right-hand, +2 is large right-hand
 		return self
 
-	def toolchange(self, T=0, D=None):
+	def toolchange(self, T=1, D=None):
 		# perform a toolchange
 		self.code("M06", T=T, D=D)
 		self.act_tool_diameter = D
@@ -141,3 +146,4 @@ class Program:
 				file.write(self.config["comment"](codesets["comment"]))
 			file.write(self.config["line_ending"])
 		file.write(self.config["footer"])
+		file.close()
