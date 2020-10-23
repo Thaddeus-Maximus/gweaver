@@ -57,24 +57,21 @@ class Program:
 		self.lines.append((code, kwargs))
 		return self
 
-	def arc(self, XB=None, YB=None, XE=None, YE=None, R=None, RS=0, XC=None, YC=None):
-		# Provide either:
-		# XB, YB, XE, YE, R, CS
-		# XB, YB, XE, YE, XC, YC
-		# R is radius, CS is "center select"; -2 is large left-hand, -1 is small left-hand, +1 is small right-hand, +2 is large right-hand
-		return self
-
 	def rapid(self, pos):
+		# a rapid movement to pos
+		# remember, rapids don't use tool compensation.
 		self.code("G00", X=pos[0], Y=pos[1], F=self.act_feedrate)
 		self.act_position = np.asarray(pos)
 		return self
 
 	def linmove(self, pos):
+		# a linear movement, from current position, to pos
 		self.code("G01", X=pos[0], Y=pos[1], F=self.act_feedrate)
 		self.act_position = np.asarray(pos)
 		return self
 
-	def arcmove(self, center, pos, dir="ccw", **kwargs):
+	def arcmove(self, center, pos, dir, **kwargs):
+		# an arc movement, from current machine position, to pos, about center, in specified direction.
 		code = ""
 		if lowerstr(dir) in ["cw", "clockwise", -1]:
 			code = "G02"
@@ -101,7 +98,7 @@ class Program:
 		# len_overall: overall length of slot
 		# wd:          width of slot
 
-		print(kwargs)
+		# offsets is an array of offsets from the final diameter. These can be repeated; e.g. offsets of [0.005,0,0] would give a roughing pass, and two finishing passes at the same diameter.
 
 		if not "wd" in kwargs:
 			raise Exception("Slot width not defined.")
@@ -182,17 +179,86 @@ class Program:
 				self.arcmove(start, pt1, dir="cw")
 				self.linmove(pt4)
 
-			firstpass = False
+			firstpass  = False
+			lastoffset = offset
+
+	def circle(self, inside=True, climb=True, offsets=[0], overlap=10, center=None, r=None, d=None):
+		# Circles are defined with:
+		# - center
+		# - r: radius, or d: diameter
+
+		# offsets is an array of offsets from the final diameter. These can be repeated; e.g. offsets of [0.005,0,0] would give a roughing pass, and two finishing passes at the same diameter.
+		# overlap is degrees of overlap, to help eliminate cusps (e.g. an overlap ot 10 will cause a movement of 370 degrees each pass)
+
+		# untested!
+
+		if center is None:
+			raise Exception("Circle center not defined.")
+		if r is None:
+			if d is None:
+				raise Exception("Circle size not defined.")
+			else:
+				r = float(d)/2
+
+		self.compensation("center")
+		firstpass  = True
+		lastoffset = offsets[0]
+		theta = 0
+
+		for offset in offsets:
+			actr = r + (-1 if inside else +1)*(self.act_tool_diameter/2 + offset)
+
+			# 1: current point
+			# 2: opposite point
+			# 3: current point + overlap angle
+			spt1 = center + actr*np.asarray((math.cos(math.radians(theta)), math.sin(math.radians(theta))))
+			spt2 = center - actr*np.asarray((math.cos(math.radians(theta)), math.sin(math.radians(theta))))
+			spt3 = center + actr*np.asarray((math.cos(math.radians(theta+overlap)), math.sin(math.radians(theta+overlap))))
+			if firstpass:
+				if inside:
+					self.rapid(center)
+					self.linmove(spt1)
+				else:
+					self.rapid(spt1)
+			elif offset != lastoffset:
+				if inside == climb:
+					self.linmove(spt1)
+
+			self.arcmove(center, spt2)
+			self.arcmove(center, spt3)
+
+			theta += overlap
+			firstpass  = False
+			lastoffset = offset
+
+	def follow_dxf(self, dxf, inside=True, climb=True, offsets=[0], overlap=0):
+		"""
+		Follows a DXF path.
+		The DXF should only contain one loop (it can be closed or open).
+		If the loop is open, you may need to change the "inside" parameter to go in the correct direction.
+
+		@param offsets: an array of offsets from the final path. These can be repeated; offsets=[0.1, 0, 0] would yield a roughing pass and two finishing passes at the same DOC.
+		@param climb:   direction to machine (climb or conventional)
+		@param overlap: for closed loops, how much to overlap between passes to eliminate cusps. For open loops, this is tangential extension distance.
+		"""
 
 	def toolchange(self, T=1, D=None):
-		# perform a toolchange
+		"Perform a toolchange."
 		self.code("M06", T=T, D=D)
 		self.act_tool_diameter = D
 		return self
 
 	def compensation(self, TC=None):
+		"""
+		Set tool compensation mode.
+
+		@param TC: Tool compensation direction.
+		Left compensation:        'l', 'left', 1
+		Right compensation:       'r', 'right', 2
+		Center (no) compensation: 'c', 'center', 0
+		"""
+
 		TC = lowerstr(TC)
-		# set compensation mode; 0=center, 1=right, 2=left
 		if TC in [0, "center", "c"]:
 			self.act_compensation = 0
 			self.code("G40")
@@ -207,6 +273,12 @@ class Program:
 		return self
 
 	def units(self, unit=""):
+		"""
+		Set document units.
+		
+		@param unit: unit to use (inches, inch, in, mm, millimeters, millimeter)
+		"""
+
 		if unit in ["in", "inch", "inches"]:
 			self.code("G20")
 		elif unit in ["mm", "millimeters", "millimeter"]:
@@ -216,6 +288,12 @@ class Program:
 		return self
 
 	def relativity(self, mode=""):
+		"""
+		Set machine relativity.
+
+		@param mode: relativity (inc or abs)
+		"""
+
 		if mode in ["relative", "inc", "rel", "incremental"]:
 			self.code("G91")
 		elif mode in ["abs", "absolute"]:
@@ -225,15 +303,11 @@ class Program:
 		return self
 
 	def comment(self, comment):
+		"""
+		Create a comment block in g-code.
+		@param comment: comment to make
+		"""
 		self.code("", comment=comment)
-		return self
-
-	def line(self, **kwargs):
-		# not too sophisticated...
-		if self.act_feedrate:
-			self.code("G01", F=self.act_feedrate, **kwargs)
-		else:
-			self.code("G01", **kwargs)
 		return self
 
 	def to_file(self, rawfile, binary=False, en_print=False):
@@ -257,10 +331,11 @@ class Program:
 				if key.isupper():
 					file.write(self.config["separator"])
 					file.write(key)
-					if type(value) == float or isinstance(value, np.float64):
+					if type(value) == int or key in ["M", "S", "G", "H", "T", "L", "N", "O", "P", "TC"]:
+						# force certain codes to be integers
+						file.write("%d"%int(value))
+					elif type(value) == float or isinstance(value, np.float64):
 						file.write(("%%.%df"%self.config["places"])%value)
-					elif type(value) == int:
-						file.write("%d"%value)
 					else:
 						file.write(value)
 					if "absolute" in codesets and codesets["absolute"] and key in ["X","XC","XB","XE","Y","YB","YC","YE","Z","ZC","ZB","ZE"]:
