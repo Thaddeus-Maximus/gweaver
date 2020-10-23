@@ -1,6 +1,8 @@
+import numpy as np
+import math
 
 PROTOTRAK_PLUS_CONFIG = {
-	"places": 4,
+	"places": 5,
 	"line_numbers": True,
 	"separator": " ",
 	"line_ending": ";\n",
@@ -32,7 +34,7 @@ class FileWrapper:
 	def write(self, x):
 		if self.en_print:
 			print(x, end='')
-		self.buf += x
+		self.buf += str(x)
 
 	def close(self):
 		#print(str.encode(self.buf))
@@ -45,6 +47,7 @@ class Program:
 		self.act_compensation  = None
 		self.act_tool_diameter = None
 		self.act_feedrate      = None
+		self.act_position      = np.asarray((0,0,0))
 
 	def feedrate(self, F=None):
 		self.act_feedrate = F
@@ -60,6 +63,126 @@ class Program:
 		# XB, YB, XE, YE, XC, YC
 		# R is radius, CS is "center select"; -2 is large left-hand, -1 is small left-hand, +1 is small right-hand, +2 is large right-hand
 		return self
+
+	def rapid(self, pos):
+		self.code("G00", X=pos[0], Y=pos[1], F=self.act_feedrate)
+		self.act_position = np.asarray(pos)
+		return self
+
+	def linmove(self, pos):
+		self.code("G01", X=pos[0], Y=pos[1], F=self.act_feedrate)
+		self.act_position = np.asarray(pos)
+		return self
+
+	def arcmove(self, center, pos, dir="ccw", **kwargs):
+		code = ""
+		if lowerstr(dir) in ["cw", "clockwise", -1]:
+			code = "G02"
+		elif lowerstr(dir) in ["ccw", "counterclockwise", +1]:
+			code = "G03"
+		else:
+			raise Exception("Invalid arc direction")
+		self.code(code, XB=self.act_position[0], YB=self.act_position[1],
+				XC = center[0], YC=center[1],
+				XE = pos[0], YE=pos[1],
+				F=self.act_feedrate, **kwargs)
+		self.act_position = pos
+		return self
+
+	def slot(self, inside=True, climb=True, offsets=[0], **kwargs): #, flat_len=None, oall_len=None, wd=None, ax=None, ay=None, bx=None, by=None, cx=None, cy=None, theta=None):
+		# Slots are defined with:
+		# wd, start, end
+		# wd, center, theta, and a len_
+
+		# start, end:  tuples of (x,y) points for start and end of slot.
+		# center:      tuple of (x,y) point for center of slot.
+		# theta:       angle at which slot is oriented (0 is +x, 90 is +y)
+		# len_flat:    length of flat part of slot
+		# len_overall: overall length of slot
+		# wd:          width of slot
+
+		print(kwargs)
+
+		if not "wd" in kwargs:
+			raise Exception("Slot width not defined.")
+		wd     = np.asarray(kwargs["wd"])
+		start  = None
+		end    = None
+		center = None
+
+		if "start" in kwargs and "end" in kwargs:
+			start  = np.asarray(kwargs["start"])
+			end    = np.asarray(kwargs["end"])
+			center = (start+end)/2
+
+			t_vec  = start-end
+			t_vec  = t_vec/np.linalg.norm(t_vec)
+			n_vec  = np.asarray((t_vec[1], -t_vec[0])) # simple x-y rotation
+
+		elif "center" in kwargs and "theta" in kwargs and ("len_flat" in kwargs or "len_overall" in kwargs):
+			center = np.asarray(kwargs["center"])
+			theta  = float(kwargs["theta"])
+			len_flat = None
+			if "len_flat" in kwargs:
+				len_flat = float(kwargs["len_flat"])
+			elif "len_overall" in kwargs:
+				len_flat = float(kwargs["len_overall"])-wd
+
+			t_vec = np.asarray((math.cos(math.radians(theta)), math.sin(math.radians(theta))))
+			n_vec = np.asarray((t_vec[1], -t_vec[0])) # simple x-y rotation
+
+			start = center + t_vec*len_flat/2
+			end   = center - t_vec*len_flat/2
+
+		else:
+			raise Exception("Slot position not defined.")
+
+		if self.act_tool_diameter is None:
+			raise Exception("Tool diameter never defined.")
+
+		self.compensation("center")
+		
+		firstpass = True
+		lastoffset = offsets[0]
+
+		for offset in offsets:
+			actwd = wd + (-1 if inside else +1)*(self.act_tool_diameter+offset*2)
+
+			pt1 = start + n_vec*actwd/2
+			pt2 = start - n_vec*actwd/2
+			pt3 = end   - n_vec*actwd/2
+			pt4 = end   + n_vec*actwd/2
+
+			if firstpass:
+				if inside:
+					self.rapid(center)
+					if climb:
+						self.linmove(pt1)
+					else:
+						self.linmove(pt4)
+				else:
+					if climb:
+						self.rapid(pt4)
+					else:
+						self.rapid(pt1)
+			elif offset != lastoffset:
+				if inside == climb:
+					self.linmove(pt1)
+				else:
+					self.linmove(pt4)
+			
+			if inside == climb:
+				self.arcmove(start, pt2, dir="ccw")
+				self.linmove(pt3)
+				self.arcmove(end,   pt4, dir="ccw")
+				self.linmove(pt1)
+			else:
+				self.arcmove(end,   pt3, dir="cw")
+				self.linmove(pt2)
+				self.arcmove(start, pt1, dir="cw")
+				self.linmove(pt4)
+
+			firstpass = False
 
 	def toolchange(self, T=1, D=None):
 		# perform a toolchange
@@ -134,7 +257,7 @@ class Program:
 				if key.isupper():
 					file.write(self.config["separator"])
 					file.write(key)
-					if type(value) == float:
+					if type(value) == float or isinstance(value, np.float64):
 						file.write(("%%.%df"%self.config["places"])%value)
 					elif type(value) == int:
 						file.write("%d"%value)
