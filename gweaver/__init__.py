@@ -205,6 +205,9 @@ class Program:
 		lastoffset = offsets[0]
 		theta = 0
 
+		if climb != inside:
+			overlap = -overlap
+
 		for offset in offsets:
 			actr = r + (-1 if inside else +1)*(self.act_tool_diameter/2 + offset)
 
@@ -221,11 +224,10 @@ class Program:
 				else:
 					self.rapid(spt1)
 			elif offset != lastoffset:
-				if inside == climb:
-					self.linmove(spt1)
+				self.linmove(spt1)
 
-			self.arcmove(center, spt2)
-			self.arcmove(center, spt3)
+			self.arcmove(center, spt2, "ccw" if climb==inside else "cw")
+			self.arcmove(center, spt3, "ccw" if climb==inside else "cw")
 
 			theta += overlap
 			firstpass  = False

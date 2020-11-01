@@ -10,10 +10,12 @@ prog.toolchange(D=0.5)
 ###  REAL  SHIT  ###
 ####################
 
-for y in [0.0, 2.0]:
+"""for y in [0.0, 2.0]:
 	prog.slot(inside=False, climb=False,
 		wd=1.0, len_overall=2.0, center=(0.0, y), theta=0,
-		offsets=[0.1, 0.005, 0.0])
+		offsets=[0.1, 0.005, 0.0])"""
+
+prog.circle(inside=True, climb=False, d=3, center=(0,0), offsets=[0.5, 0.1, 0.0, 0.0], overlap=20)
 
 ####################
 ### POST PROCESS ###
