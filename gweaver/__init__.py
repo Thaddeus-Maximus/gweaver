@@ -64,26 +64,41 @@ class Program:
 		self.act_position = np.asarray(pos)
 		return self
 
-	def linmove(self, pos):
+	def linmove(self, pos, chain_pct=None):
 		# a linear movement, from current position, to pos
-		self.code("G01", X=pos[0], Y=pos[1], F=self.act_feedrate)
-		self.act_position = np.asarray(pos)
+		if chain_pct is None:
+			self.code("G01", X=pos[0], Y=pos[1], F=self.act_feedrate)
+			self.act_position = np.asarray(pos)
+		else:
+			start = self.act_position
+			delta = np.asarray(pos)-self.act_position
+			d = np.linalg.norm(delta)
+			n = round(d/(self.act_tool_diameter*float(chain_pct)/100.0))
+			for i in range(n+1):
+				self.rapid(start + delta*float(i)/n)
+
 		return self
 
-	def arcmove(self, center, pos, dir, **kwargs):
+	def arcmove(self, center, pos, dir, chain_pct=None, **kwargs):
 		# an arc movement, from current machine position, to pos, about center, in specified direction.
-		code = ""
-		if lowerstr(dir) in ["cw", "clockwise", -1]:
-			code = "G02"
-		elif lowerstr(dir) in ["ccw", "counterclockwise", +1]:
-			code = "G03"
+		if chain_pct is None:
+			code = ""
+			if lowerstr(dir) in ["cw", "clockwise", -1]:
+				code = "G02"
+			elif lowerstr(dir) in ["ccw", "counterclockwise", +1]:
+				code = "G03"
+			else:
+				raise Exception("Invalid arc direction")
+			self.code(code, XB=self.act_position[0], YB=self.act_position[1],
+					XC = center[0], YC=center[1],
+					XE = pos[0], YE=pos[1],
+					F=self.act_feedrate, **kwargs)
+			self.act_position = pos
 		else:
-			raise Exception("Invalid arc direction")
-		self.code(code, XB=self.act_position[0], YB=self.act_position[1],
-				XC = center[0], YC=center[1],
-				XE = pos[0], YE=pos[1],
-				F=self.act_feedrate, **kwargs)
-		self.act_position = pos
+			start = self.act_position
+			# blah blah do the chain drilling...
+			raise Exception("Thad's lazy, you can't chain drill/plunge mill arcs yet")
+
 		return self
 
 	def slot(self, inside=True, climb=True, offsets=[0], **kwargs): #, flat_len=None, oall_len=None, wd=None, ax=None, ay=None, bx=None, by=None, cx=None, cy=None, theta=None):
@@ -182,7 +197,7 @@ class Program:
 			firstpass  = False
 			lastoffset = offset
 
-	def circle(self, inside=True, climb=True, offsets=[0], overlap=10, center=None, r=None, d=None):
+	def circle(self, inside=True, climb=True, offsets=[0], overlap=10, center=None, r=None, d=None, chain_pct=None):
 		# Circles are defined with:
 		# - center
 		# - r: radius, or d: diameter
@@ -204,34 +219,41 @@ class Program:
 		firstpass  = True
 		lastoffset = offsets[0]
 		theta = 0
-
 		if climb != inside:
 			overlap = -overlap
 
 		for offset in offsets:
 			actr = r + (-1 if inside else +1)*(self.act_tool_diameter/2 + offset)
+			if chain_pct is None:
+				# 1: current point
+				# 2: opposite point
+				# 3: current point + overlap angle
+				spt1 = center + actr*np.asarray((math.cos(math.radians(theta)), math.sin(math.radians(theta))))
+				spt2 = center - actr*np.asarray((math.cos(math.radians(theta)), math.sin(math.radians(theta))))
+				spt3 = center + actr*np.asarray((math.cos(math.radians(theta+overlap)), math.sin(math.radians(theta+overlap))))
+				if firstpass:
+					if inside:
+						self.rapid(center)
+						self.linmove(spt1)
+					else:
+						self.rapid(spt1)
+				elif offset != lastoffset:
+					if inside == climb:
+						self.linmove(spt1)
 
-			# 1: current point
-			# 2: opposite point
-			# 3: current point + overlap angle
-			spt1 = center + actr*np.asarray((math.cos(math.radians(theta)), math.sin(math.radians(theta))))
-			spt2 = center - actr*np.asarray((math.cos(math.radians(theta)), math.sin(math.radians(theta))))
-			spt3 = center + actr*np.asarray((math.cos(math.radians(theta+overlap)), math.sin(math.radians(theta+overlap))))
-			if firstpass:
-				if inside:
-					self.rapid(center)
-					self.linmove(spt1)
-				else:
-					self.rapid(spt1)
-			elif offset != lastoffset:
-				self.linmove(spt1)
 
-			self.arcmove(center, spt2, "ccw" if climb==inside else "cw")
-			self.arcmove(center, spt3, "ccw" if climb==inside else "cw")
-
-			theta += overlap
-			firstpass  = False
-			lastoffset = offset
+				self.arcmove(center, spt2, "ccw" if climb==inside else "cw")
+				self.arcmove(center, spt3, "ccw" if climb==inside else "cw")
+				
+				theta += overlap
+				firstpass  = False
+				lastoffset = offset
+			else:
+				c = math.pi*r*2 # circumference
+				n = round(c/(self.act_tool_diameter*float(chain_pct)/100.0))
+				for i in range(n):
+					theta = math.pi*2.0*float(i)/n
+					self.rapid(np.asarray((math.cos(theta), math.sin(theta)))*actr + np.asarray(center))
 
 	def follow_dxf(self, dxf, inside=True, climb=True, offsets=[0], overlap=0):
 		"""
@@ -243,6 +265,7 @@ class Program:
 		@param climb:   direction to machine (climb or conventional)
 		@param overlap: for closed loops, how much to overlap between passes to eliminate cusps. For open loops, this is tangential extension distance.
 		"""
+		raise Exception("Thad's lazy, DXF stuff don't exist yet")
 
 	def toolchange(self, T=1, D=None):
 		"Perform a toolchange."
