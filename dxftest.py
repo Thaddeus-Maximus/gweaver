@@ -10,11 +10,12 @@ prog.toolchange(D=0.5)
 ###  REAL  SHIT  ###
 ####################
 
-print(gw.dxf_entities("test.dxf"))
+prog.follow_dxf("test.dxf", inside=False)
 
 ####################
 ### POST PROCESS ###
 ####################
 
 #with serial.Serial("COM3", baudrate=4800, bytesize=serial.SEVENBITS, parity=serial.PARITY_EVEN, stopbits=serial.STOPBITS_ONE) as s:
-#	prog.to_file(s, binary=True, en_print=True)
+with open("dump.nc", "w") as s:
+	prog.to_file(s, binary=False, en_print=True)

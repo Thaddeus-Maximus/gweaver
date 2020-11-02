@@ -32,8 +32,9 @@ def swept_angle(e, s):
     sa += 360
 
 class DXFEntity(object):
-  __slots__ = ('entity', 'start', 'end', 'segmnt', 'reversed')
-  def __init__(self, entity, start, end, segmnt=0):
+  __slots__ = ('entity', 'etype', 'start', 'end', 'segmnt', 'reversed')
+  def __init__(self, etype, entity, start, end, segmnt=0):
+    self.etype  = etype
     self.entity = entity
     self.start  = start
     self.end    = end
@@ -68,6 +69,7 @@ def dxf_entities(filename, scaling=1.0):
   for e in msp.query('LINE'):
     l = math.hypot(e.dxf.start[0]-e.dxf.end[0], e.dxf.start[1]-e.dxf.end[1])
     segs.append(DXFEntity(
+      'LINE',
       e,
       e.dxf.start,
       e.dxf.end ))
@@ -83,6 +85,7 @@ def dxf_entities(filename, scaling=1.0):
 
     k = 1/float(e.dxf.radius)
     segs.append(DXFEntity(
+      'ARC',
       e,
       e.start_point,
       e.end_point ))
@@ -90,7 +93,7 @@ def dxf_entities(filename, scaling=1.0):
   for e in msp.query('SPLINE'):
     ct = e.construction_tool()
 
-    segs.append(TrackSegment(e, ct.point(0), ct.point(ct.max_t)))
+    segs.append(TrackSegment('SPLINE', e, ct.point(0), ct.point(ct.max_t)))
 
   # build connectivity (refer to old algo)
   # find an entity whose start point or end is at nearpt
@@ -163,7 +166,7 @@ class Program:
   def rapid(self, pos):
     # a rapid movement to pos
     # remember, rapids don't use tool compensation.
-    self.code("G00", X=pos[0], Y=pos[1], F=self.act_feedrate)
+    self.code("G00", X=pos[0], Y=pos[1])
     self.act_position = np.asarray(pos)
     return self
 
@@ -370,7 +373,14 @@ class Program:
     """
     entities = dxf_entities(dxf_filename, dxf_scaling)
 
+    self.compensation("center")
+    self.rapid(entities[0].start)
+
     for entity in entities:
+      if   entity.etype == 'LINE':
+        self.linmove(entity.end)
+      elif entity.etype == 'ARC':
+        self.arcmove(entity.entity.dxf.center, entity.end, "cw" if entity.reversed else "ccw")
 
 
   def toolchange(self, T=1, D=None):
