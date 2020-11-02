@@ -42,7 +42,6 @@ class DXFEntity(object):
 
   def reverse(self):
     # TODO: THIS
-    print("Reversed")
     self.start, self.end = self.end, self.start
     self.reversed = not self.reversed
     return self
@@ -93,9 +92,6 @@ def dxf_entities(filename, scaling=1.0):
 
     segs.append(TrackSegment(e, ct.point(0), ct.point(ct.max_t)))
 
-  for seg in segs:
-    print(seg)
-
   # build connectivity (refer to old algo)
   # find an entity whose start point or end is at nearpt
   # add the entity's end point to the big DC matrix
@@ -114,7 +110,6 @@ def dxf_entities(filename, scaling=1.0):
       if d < EPSILON:
         segs_stitched.append(seg)
         nearpt = seg.end
-        print("connected")
         segs.pop(i)
         break
     else:
@@ -123,7 +118,6 @@ def dxf_entities(filename, scaling=1.0):
         if d < EPSILON:
           segs_stitched.append(seg.reverse())
           nearpt = seg.end
-          print("connected")
           segs.pop(i)
           break
       else:
@@ -364,7 +358,7 @@ class Program:
           theta = math.pi*2.0*float(i)/n
           self.rapid(np.asarray((math.cos(theta), math.sin(theta)))*actr + np.asarray(center))
 
-  def follow_dxf(self, dxf, inside=True, climb=True, offsets=[0], overlap=0):
+  def follow_dxf(self, dxf_filename, dxf_scaling=1.0, inside=True, climb=True, offsets=[0], overlap=0):
     """
     Follows a DXF path.
     The DXF should only contain one loop (it can be closed or open).
@@ -374,7 +368,10 @@ class Program:
     @param climb:   direction to machine (climb or conventional)
     @param overlap: for closed loops, how much to overlap between passes to eliminate cusps. For open loops, this is tangential extension distance.
     """
-    raise Exception("Thad's lazy, DXF stuff don't exist yet")
+    entities = dxf_entities(dxf_filename, dxf_scaling)
+
+    for entity in entities:
+
 
   def toolchange(self, T=1, D=None):
     "Perform a toolchange."
