@@ -22,6 +22,10 @@ BENCHMAN_CONFIG = {
   "compensation": False
 }
 
+def prototrak_serial(port):
+  import serial
+  return serial.Serial(port, baudrate=4800, bytesize=serial.SEVENBITS, parity=serial.PARITY_EVEN, stopbits=serial.STOPBITS_ONE)
+
 def lowerstr(x):
   return x.lower() if type(x) == type(str) else x
 
@@ -344,8 +348,8 @@ class Program:
           else:
             self.rapid(spt1)
         elif offset != lastoffset:
-          if inside == climb:
-            self.linmove(spt1)
+          #if inside == climb:
+          self.linmove(spt1)
 
 
         self.arcmove(center, spt2, "ccw" if climb==inside else "cw")
