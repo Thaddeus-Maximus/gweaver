@@ -5,3 +5,6 @@ Future plans:
  - Toolpath generation
  - "Compiled" tool offsets (some machines like Intellitek's don't have real tool diameter compensation)
  - DXF parsing
+
+Dependencies
+ - cavaliercontours-python

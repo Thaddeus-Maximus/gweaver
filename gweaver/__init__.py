@@ -4,6 +4,7 @@ import ezdxf as dxf
 
 PROTOTRAK_PLUS_CONFIG = {
   "places": 5,
+  "axes": 2,
   "line_numbers": True,
   "separator": " ",
   "line_ending": ";\n",
@@ -13,13 +14,16 @@ PROTOTRAK_PLUS_CONFIG = {
   "compensation": True
 }
 
-BENCHMAN_CONFIG = {
+INTELLITEK_CONFIG = {
   "places": 4,
+  "axes": 3,
   "line_numbers": True,
   "separator": " ",
-  "line_ending": ";\n",
-  "comment": lambda x: "",
-  "compensation": False
+  "line_ending": "\n",
+  "comment": lambda x: "; "+x,
+  "compensation": False,
+  "header": "%\n",
+  "footer": ""
 }
 
 def prototrak_serial(port):
@@ -154,6 +158,7 @@ class Program:
   def __init__(self, config):
     self.lines = []
     self.config = config
+    self.axes   = config["axes"]
     self.act_compensation  = None
     self.act_tool_diameter = None
     self.act_feedrate      = None
@@ -177,7 +182,12 @@ class Program:
   def linmove(self, pos, chain_pct=None):
     # a linear movement, from current position, to pos
     if chain_pct is None:
-      self.code("G01", X=pos[0], Y=pos[1], F=self.act_feedrate)
+      if self.axes == 2:
+        self.code("G01", X=pos[0], Y=pos[1], F=self.act_feedrate)
+      elif self.axes == 3:
+        self.code("G01", X=pos[0], Y=pos[1], Z=pos[2], F=self.act_feedrate)
+      else:
+        raise ValueError("Invalid config.axes")
       self.act_position = np.asarray(pos)
     else:
       start = self.act_position
@@ -189,7 +199,7 @@ class Program:
 
     return self
 
-  def arcmove(self, center, pos, dir, chain_pct=None, **kwargs):
+  def arcmove(self, center, pos, dir, plane="XY", height=0, chain_pct=None, **kwargs):
     # an arc movement, from current machine position, to pos, about center, in specified direction.
     if chain_pct is None:
       code = ""
